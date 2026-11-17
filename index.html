@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Прогулочная рулетка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Onest:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!--
+  НАСТРОЙКА ДЛЯ ЗАПУСКА В TELEGRAM MINI APP (БЕЗ СЕРВЕРА):
+  1. Firebase: console.firebase.google.com -> создать проект -> Build -> Firestore Database -> Create (test mode).
+  2. Project settings -> Your apps -> Web (</>) -> скопировать firebaseConfig в CONFIG ниже.
+  3. Залить этот файл (строго с именем index.html) на GitHub Pages и указать ссылку в @BotFather (/newapp).
+  4. Пока CONFIG пустой, приложение работает в демо-режиме (локально на устройстве).
+-->
+<style>
+:root{
+  --bg:#dfe3f1; --card:#fbfaff; --ink:#1b1f3b; --muted:#5b6188;
+  --pink:#ff4f87; --mint:#6fdcbc; --gold:#ffc23d; --line:#c3c9e3;
+  --r:22px;
+  --top:env(safe-area-inset-top,0px); --bot:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#14172b; --card:#1f2342; --ink:#f1f0ff; --muted:#9aa1cf; --line:#343a66; }
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--ink);
+  font:400 16px/1.45 "Onest",system-ui,sans-serif;
+  padding:calc(var(--top) + 14px) 16px calc(var(--bot) + 24px);
+  max-width:520px; margin:0 auto;
+}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid var(--pink);outline-offset:2px}
+
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}
+h1{font:800 20px/1.1 "Unbounded",sans-serif;letter-spacing:-.02em}
+.room{font-size:13px;color:var(--muted)}
+.room button{text-decoration:underline;color:var(--muted)}
+.score{font:600 14px "Unbounded",sans-serif;background:var(--ink);color:var(--bg);padding:6px 12px;border-radius:99px}
+
+.tabs{display:flex;gap:6px;margin-bottom:14px;background:var(--line);padding:4px;border-radius:99px}
+.tabs button{flex:1;padding:9px;border-radius:99px;font-weight:600;color:var(--muted)}
+.tabs button[aria-selected=true]{background:var(--card);color:var(--ink)}
+
+.stage{
+  background:var(--card); border-radius:var(--r); padding:22px 20px;
+  min-height:120px; display:flex;flex-direction:column;justify-content:center;gap:14px;
+  border:2px solid var(--ink); box-shadow:6px 6px 0 var(--ink);
+  transition:transform .15s;
+}
+.stage.spinning{transform:rotate(-1.2deg)}
+.stage.jackpot{background:var(--gold);color:#1b1f3b;border-color:#1b1f3b}
+.tag{align-self:flex-start;font-size:13px;font-weight:600;padding:3px 10px;border-radius:99px;border:2px solid currentColor}
+.tag.rare{background:var(--mint);color:#0f3b2e;border-color:#0f3b2e}
+.tag.legend{background:var(--gold);color:#3d2a00;border-color:#3d2a00}
+.task{font:800 clamp(22px,6.4vw,30px)/1.15 "Unbounded",sans-serif;letter-spacing:-.02em;word-break:break-word}
+.task + .task{border-top:2px dashed currentColor;padding-top:14px}
+.spinning .task{opacity:.55}
+.by{font-size:13px;color:var(--muted)}
+.jackpot .by,.stage.joker .by{color:inherit;opacity:.88}
+.hint{color:var(--muted);font-size:15px}
+
+/* Специальные элементы джокеров */
+.timer{
+  font:800 32px/1 "Unbounded",sans-serif;
+  padding:10px 14px; border-radius:14px;
+  background:rgba(0,0,0,.18); align-self:flex-start;
+  letter-spacing:.03em;
+}
+.timer.urgent{background:#1b1f3b;color:var(--gold)}
+.fork-list{display:flex;flex-direction:column;gap:10px}
+.fork-opt{
+  text-align:left; padding:14px; border-radius:16px;
+  border:2px solid currentColor; background:rgba(255,255,255,.12);
+  font:800 clamp(17px,5vw,21px)/1.2 "Unbounded",sans-serif;
+  transition:transform .1s, background .15s;
+}
+.fork-opt[aria-pressed=true]{
+  background:var(--card); color:var(--ink); border-color:var(--ink);
+  box-shadow:3px 3px 0 var(--ink);
+}
+.fork-opt small{display:block;font:600 12px "Onest",sans-serif;opacity:.75;margin-top:4px}
+.secret-btn{
+  align-self:flex-start; padding:11px 16px; border-radius:14px;
+  background:var(--card); color:var(--ink); border:2px solid var(--ink);
+  font-weight:600; box-shadow:3px 3px 0 var(--ink);
+}
+.secret-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.boom-badge{
+  align-self:flex-start; padding:6px 12px; border-radius:12px;
+  background:var(--gold); color:#1b1f3b; border:2px solid #1b1f3b;
+  font-weight:600; font-size:14px;
+}
+
+.row{display:flex;gap:10px;margin-top:16px}
+.big{
+  flex:1;padding:16px;border-radius:var(--r);background:var(--pink);color:#fff;
+  font:800 18px "Unbounded",sans-serif;border:2px solid var(--ink);box-shadow:4px 4px 0 var(--ink);
+}
+.big:active:not(:disabled){transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
+.big:disabled{opacity:.5;cursor:default}
+.ghost{flex:1;padding:13px;border-radius:var(--r);border:2px solid var(--ink);font-weight:600}
+.ghost:disabled{opacity:.4;cursor:default}
+.small{font-size:13px;color:var(--muted);text-align:center;margin-top:14px}
+.small button{text-decoration:underline;color:var(--muted)}
+
+.attach{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+.attach[hidden]{display:none}
+.filebtn{display:block;text-align:center;cursor:pointer;flex:none}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.thumbs:empty{display:none}
+.th{position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;background:var(--line)}
+.th img,.th video{width:100%;height:100%;object-fit:cover;display:block}
+.th .x{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:16px;line-height:1}
+.th.up::after{content:"Загрузка";position:absolute;inset:0;display:grid;place-items:center;background:rgba(27,31,59,.6);color:#fff;font-size:13px;font-weight:600}
+#doneList{display:flex;flex-direction:column;gap:12px}
+.entry{background:var(--card);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:10px}
+.entry h3{font:800 17px/1.2 "Unbounded",sans-serif;letter-spacing:-.01em;word-break:break-word}
+.entry .m{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.entry .del{color:var(--muted);text-decoration:underline;font-size:13px}
+.gal{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.gal img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:14px;display:block;background:var(--line);cursor:zoom-in}
+.gal video{grid-column:1/-1;width:100%;max-height:320px;border-radius:14px;background:#000}
+.lightbox{position:fixed;inset:0;background:rgba(10,12,30,.92);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out;z-index:20}
+.lightbox[hidden]{display:none}
+.lightbox img{max-width:100%;max-height:100%;border-radius:12px}
+.wheelbox{position:relative;width:min(100%,320px);aspect-ratio:1;margin:14px auto 26px}
+.wheelbox[hidden]{display:none}
+.wheelbox::before{content:"";position:absolute;inset:0;border-radius:50%;background:var(--ink);transform:translate(6px,6px)}
+#wheelSpin{position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;border:3px solid var(--ink);background:var(--card);transition:transform 3.8s cubic-bezier(.12,.62,.08,1)}
+#wheelSpin svg{display:block;width:100%;height:100%}
+.pointer{position:absolute;left:50%;top:-16px;margin-left:-14px;z-index:2;filter:drop-shadow(2px 0 0 var(--ink)) drop-shadow(-2px 0 0 var(--ink)) drop-shadow(0 -2px 0 var(--ink)) drop-shadow(0 2px 0 var(--ink))}
+.pointer::before{content:"";display:block;width:28px;height:32px;background:var(--pink);clip-path:polygon(0 0,100% 0,50% 100%)}
+.seg{stroke:var(--ink);stroke-width:1.2}
+.seg.common{fill:var(--card)} .seg.rare{fill:var(--mint)} .seg.legend{fill:var(--gold)} .seg.joker{fill:var(--pink)}
+.wt{font-family:"Onest",system-ui,sans-serif;font-weight:600;fill:#1b1f3b}
+.wt.common{fill:var(--ink)} .wt.joker{fill:#fff}
+.hub{fill:var(--ink)}
+.tag.joker{background:#1b1f3b;color:#fff;border-color:#1b1f3b}
+.stage.joker{background:var(--pink);color:#fff;border-color:var(--ink)}
+.stage.joker .hint,.stage.jackpot .hint{color:inherit}
+.jokers{margin-top:20px}
+.jokers .jt{font-weight:600;margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 12px;border-radius:99px;border:2px solid var(--ink);font-size:14px;font-weight:600}
+.chip[aria-pressed=true]{background:var(--pink);color:#fff}
+.jnote{font-size:13px;color:var(--muted);margin-top:8px}
+.status{margin:-4px 0 12px;padding:8px 12px;border-radius:14px;background:var(--gold);color:#1b1f3b;font-size:13px;font-weight:600}
+.status[hidden]{display:none}
+.panel[hidden]{display:none}
+form{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+textarea,input[type=text]{
+  width:100%;padding:12px 14px;border-radius:16px;border:2px solid var(--ink);
+  background:var(--card);color:var(--ink);font:inherit;resize:none
+}
+.rarity{display:flex;gap:6px}
+.rarity label{flex:1}
+.rarity input{position:absolute;opacity:0}
+.rarity span{display:block;text-align:center;padding:9px 4px;border-radius:14px;border:2px solid var(--line);font-size:14px;font-weight:600}
+.rarity input:checked + span{border-color:var(--ink);background:var(--card)}
+.rarity input:focus-visible + span{outline:3px solid var(--pink)}
+
+ul{list-style:none;padding:0;display:flex;flex-direction:column;gap:8px}
+li{display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:16px;padding:12px 14px}
+li .t{flex:1;word-break:break-word}
+li .m{font-size:12px;color:var(--muted)}
+li .dot{width:10px;height:10px;border-radius:50%;margin-top:7px;flex:none;background:var(--line)}
+li .dot.rare{background:var(--mint)} li .dot.legend{background:var(--gold)}
+li .del{color:var(--muted);font-size:20px;line-height:1;padding:0 4px}
+
+.overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;justify-content:center;gap:12px;padding:24px;max-width:520px;margin:0 auto;z-index:15}
+.overlay[hidden]{display:none}
+.overlay h2{font:800 24px/1.1 "Unbounded",sans-serif}
+.modal-bg{position:fixed;inset:0;background:rgba(10,12,30,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:25}
+.modal-bg[hidden]{display:none}
+.modal-card{
+  width:100%;max-width:360px;background:var(--card);color:var(--ink);
+  border:2px solid var(--ink);border-radius:var(--r);box-shadow:6px 6px 0 var(--ink);
+  padding:20px;display:flex;flex-direction:column;gap:14px;
+}
+.modal-card p{font-weight:600;font-size:16px}
+.modal-card .row{margin-top:4px}
+.toast{position:fixed;left:50%;bottom:calc(var(--bot) + 20px);transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Прогулочная рулетка</h1>
+    <div class="room">Компания: <span id="roomName"></span> <button id="changeRoom" type="button">сменить</button></div>
+  </div>
+  <div class="score" id="score" aria-label="Засчитано заданий">0</div>
+</header>
+<p class="status" id="status" role="status" hidden></p>
+
+<div class="tabs" role="tablist">
+  <button role="tab" id="tabRoll" aria-selected="true" aria-controls="panelRoll">Крутить</button>
+  <button role="tab" id="tabPool" aria-selected="false" aria-controls="panelPool">Пул <span id="count"></span></button>
+  <button role="tab" id="tabDone" aria-selected="false" aria-controls="panelDone">История <span id="doneCount"></span></button>
+</div>
+
+<section class="panel" id="panelRoll" role="tabpanel" aria-labelledby="tabRoll">
+  <div class="wheelbox" id="wheelbox" hidden>
+    <div class="pointer" aria-hidden="true"></div>
+    <div id="wheelSpin"></div>
+  </div>
+  <div class="stage" id="stage" aria-live="polite"></div>
+  <div class="attach" id="attach" hidden>
+    <label class="ghost filebtn">Добавить фото или видео
+      <input type="file" id="file" accept="image/*,video/*" multiple hidden>
+    </label>
+    <div class="thumbs" id="thumbs"></div>
+  </div>
+  <div class="row">
+    <button class="big" id="spin" type="button">Крутить</button>
+  </div>
+  <div class="row">
+    <button class="ghost" id="reroll" type="button" disabled>Реролл (1)</button>
+    <button class="ghost" id="done" type="button" disabled>Засчитано</button>
+  </div>
+  <div class="jokers">
+    <div class="jt">Джокеры на колесе</div>
+    <div class="chips" id="chips"></div>
+    <p class="jnote" id="jnote"></p>
+  </div>
+  <p class="small">Новая прогулка сбросит счёт и реролл. <button id="reset" type="button">Начать заново</button></p>
+</section>
+
+<section class="panel" id="panelPool" role="tabpanel" aria-labelledby="tabPool" hidden>
+  <form id="addForm">
+    <textarea id="newText" rows="2" maxlength="140" placeholder="Что предлагаешь? Например: съесть черешню" required></textarea>
+    <div class="rarity" role="radiogroup" aria-label="Редкость">
+      <label><input type="radio" name="rar" value="common" checked><span>Обычное</span></label>
+      <label><input type="radio" name="rar" value="rare"><span>Редкое</span></label>
+      <label><input type="radio" name="rar" value="legend"><span>Легендарное</span></label>
+    </div>
+    <button class="big" type="submit">Добавить в пул</button>
+  </form>
+  <ul id="list"></ul>
+</section>
+
+<section class="panel" id="panelDone" role="tabpanel" aria-labelledby="tabDone" hidden>
+  <div id="doneList"></div>
+</section>
+
+<div class="overlay" id="roomGate" hidden>
+  <h2>Код вашей компании</h2>
+  <p class="hint">Все, кто введёт тот же код, увидят общий пул заданий. Придумайте любое слово.</p>
+  <input type="text" id="roomInput" maxlength="30" placeholder="например: progulka-2026" autocomplete="off">
+  <button class="big" id="roomSave" type="button">Войти</button>
+</div>
+
+<div class="modal-bg" id="confirmGate" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <p id="confirmMsg"></p>
+    <div class="row">
+      <button class="ghost" id="confirmNo" type="button">Отмена</button>
+      <button class="big" id="confirmYes" type="button">Да</button>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox" id="light" hidden><img id="lightImg" alt=""></div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* ---------- Настройки ---------- */
+const CONFIG = {
+  apiKey: "AIzaSyCu5CDuwrFG1-hLdMgQQg1VT_gicDFFCYM",
+  authDomain: "progulka-roulette.firebaseapp.com",
+  projectId: "progulka-roulette",
+  storageBucket: "progulka-roulette.firebasestorage.app",
+  messagingSenderId: "991501251876",
+  appId: "1:991501251876:web:f595d5d4b4aff02d262fb1"
+};
+/* Cloudinary (бесплатно, по желанию): cloud name и unsigned upload preset.
+   Пока пусто — фото сжимаются и хранятся в базе/памяти, а видео живут до перезагрузки. */
+const CLOUD = { name: "", preset: "" };
+const LABELS  = { common: "Обычное", rare: "Редкое", legend: "Легендарное" };
+const SPIN_MS = 3800;
+const REROLLS_PER_WALK = 1;
+const SPEEDRUN_SEC = 7 * 60;
+
+/* ---------- Утилиты ---------- */
+const $ = id => document.getElementById(id);
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
+const user = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
+const myName = user ? (user.first_name || "Аноним") : "Аноним";
+
+function ask(msg, yes) {
+  if (tg && tg.showConfirm && tg.isVersionAtLeast && tg.isVersionAtLeast("6.2")) {
+    try { tg.showConfirm(msg, ok => { if (ok) yes(); }); return; } catch (e) {}
+  }
+  $("confirmMsg").textContent = msg;
+  $("confirmGate").hidden = false;
+  $("confirmNo").onclick = () => { $("confirmGate").hidden = true; };
+  $("confirmYes").onclick = () => { $("confirmGate").hidden = true; yes(); };
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const haptic = (kind = "medium") => { try { tg.HapticFeedback.impactOccurred(kind); } catch (e) {} };
+const memStore = {};
+const ls = {
+  get(k, d) {
+    try { const v = localStorage.getItem(k); return v === null ? (k in memStore ? memStore[k] : d) : JSON.parse(v); }
+    catch (e) { return k in memStore ? memStore[k] : d; }
+  },
+  set(k, v) {
+    memStore[k] = v;
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {}
+  }
+};
+function toast(msg, ms = 1800) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), ms);
+}
+function setStatus(msg) { const el = $("status"); el.textContent = msg || ""; el.hidden = !msg; }
+function errText(e) {
+  const c = String((e && (e.code || e.message)) || "ошибка");
+  if (/permission/.test(c)) return "Нет доступа к базе: в Firebase откройте правила Firestore (тестовый режим)";
+  if (/unavailable|network|offline|fetch/.test(c)) return "Нет связи с базой: проверьте интернет или VPN";
+  if (/not-found|failed-precondition/.test(c)) return "База не создана: создайте Firestore в Firebase";
+  if (/invalid-argument|exceeds the maximum|too large/i.test(c)) return "Слишком большой размер вложений: прикрепите 1–3 фото";
+  return "Ошибка базы: " + c.slice(0, 70);
+}
+
+/* ---------- Комната ---------- */
+let room = (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || ls.get("room", "");
+function showRoomGate() { $("roomGate").hidden = false; $("roomInput").value = room || ""; $("roomInput").focus(); }
+$("changeRoom").onclick = showRoomGate;
+$("roomSave").onclick = () => {
+  const v = $("roomInput").value.trim().toLowerCase().replace(/[^a-zа-яё0-9_-]/gi, "");
+  if (!v) return toast("Введите код");
+  room = v; ls.set("room", v); location.reload();
+};
+
+/* ---------- Хранилище: Firebase или демо ---------- */
+const DEMO = [
+  { id: "d1", text: "Сфоткайте что-нибудь жёлтое", rarity: "common", author: "Аня" },
+  { id: "d2", text: "Съесть черешню или сезонную ягоду", rarity: "common", author: "Макс" },
+  { id: "d3", text: "Идти только налево на каждом перекрёстке 10 минут", rarity: "rare", author: "Лёша" },
+  { id: "d4", text: "Станцевать в центре площади под уличную музыку", rarity: "legend", author: "Катя" }
+];
+async function makeStore(forceDemo) {
+  if (!CONFIG.projectId || forceDemo) {
+    let items = ls.get("demo_tasks", DEMO);
+    let cb = () => {};
+    const save = () => { ls.set("demo_tasks", items); cb(items); };
+    let dn = ls.get("demo_done", []);
+    let cbD = () => {};
+    let st = ls.get("demo_settings", {});
+    let cbS = () => {};
+    const saveD = () => {
+      ls.set("demo_done", dn.map(d => ({ ...d, media: (d.media || []).filter(m => !m.temp) })));
+      cbD(dn);
+    };
+    return {
+      demo: true,
+      subscribe(f) { cb = f; cb(items); },
+      async add(t) { items = [{ ...t, id: "l" + Date.now() }, ...items]; save(); },
+      async remove(id) { items = items.filter(x => x.id !== id); save(); },
+      subscribeSettings(f) { cbS = f; cbS(st); },
+      async saveSettings(x) { st = { ...st, ...x }; ls.set("demo_settings", st); cbS(st); },
+      subscribeDone(f) { cbD = f; cbD(dn); },
+      async addDone(e) { dn = [{ ...e, id: "d" + Date.now(), createdAt: Date.now() }, ...dn]; saveD(); },
+      async removeDone(id) { dn = dn.filter(x => x.id !== id); saveD(); }
+    };
+  }
+  const V = "10.14.1";
+  const app = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+  const fs  = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+  const db = fs.initializeFirestore(app.initializeApp(CONFIG), { experimentalAutoDetectLongPolling: true });
+  const col = fs.collection(db, "rooms", room, "tasks");
+  const doneCol = fs.collection(db, "rooms", room, "done");
+  const setRef = fs.doc(db, "rooms", room, "meta", "settings");
+  return {
+    demo: false,
+    subscribe(f) {
+      let last = "", offlineTimer = null;
+      fs.onSnapshot(fs.query(col, fs.orderBy("createdAt", "desc")), { includeMetadataChanges: true },
+        snap => {
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const sig = JSON.stringify(list.map(x => [x.id, x.text, x.rarity]));
+          if (sig !== last) { last = sig; f(list); }
+          clearTimeout(offlineTimer);
+          if (snap.metadata.fromCache) offlineTimer = setTimeout(() => setStatus("Нет связи с базой: новые задания пока не синхронизируются"), 6000);
+          else setStatus("");
+        },
+        err => { setStatus(errText(err)); toast(errText(err), 5000); });
+    },
+    add: t => fs.addDoc(col, { ...t, createdAt: fs.serverTimestamp() }),
+    remove: id => fs.deleteDoc(fs.doc(db, "rooms", room, "tasks", id)),
+    subscribeSettings(f) {
+      fs.onSnapshot(setRef, snap => f(snap.exists() ? snap.data() : {}), () => {});
+    },
+    saveSettings: x => fs.setDoc(setRef, x, { merge: true }),
+    subscribeDone(f) {
+      fs.onSnapshot(fs.query(doneCol, fs.orderBy("createdAt", "desc")),
+        snap => f(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+        err => toast(errText(err), 5000));
+    },
+    addDone: e => fs.addDoc(doneCol, { ...e, createdAt: fs.serverTimestamp() }),
+    removeDone: id => fs.deleteDoc(fs.doc(db, "rooms", room, "done", id))
+  };
+}
+
+/* ---------- Состояние прогулки ---------- */
+let tasks = [];
+let walk = ls.get("walk", { score: 0, rerolls: REROLLS_PER_WALK });
+let current = null;
+let busy = false;
+let media = [];
+let uploading = 0;
+let done = [];
+let timerHandle = null;
+const saveWalk = () => ls.set("walk", walk);
+function stopTimer() { if (timerHandle) { clearInterval(timerHandle); timerHandle = null; } }
+
+/* ---------- Рандом, шансы и равномерная раскладка колеса ---------- */
+const TIER_CHANCE = { common: 56, rare: 26, legend: 10, joker: 8 };
+const JOKERS = {
+  jackpot:   { name: "Джекпот",         hint: "два занятия сразу, нужно совместить" },
+  bonus:     { name: "Бонусный реролл", hint: "плюс один реролл в запас" },
+  boomerang: { name: "Бумеранг",        hint: "выполняет в одиночку автор карточки" },
+  speedrun:  { name: "Спидран",         hint: "7 минут на выполнение с таймером" },
+  fork:      { name: "Развилка",        hint: "два задания на выбор компании" },
+  agent:     { name: "Секретный агент", hint: "текст виден только одному игроку" },
+  dejavu:    { name: "Дежавю",          hint: "повторить выполненное задание из истории" }
+};
+let enabledJokers = Object.keys(JOKERS);
+const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const esc = str => String(str).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tierOf = t => (t.rarity === "rare" || t.rarity === "legend") ? t.rarity : "common";
+const needsPair = k => k === "jackpot" || k === "fork";
+const activeJokers = () => enabledJokers.filter(k => k in JOKERS && (!needsPair(k) || tasks.length >= 2));
+
+function wheelModel() {
+  const jk = activeJokers();
+  const tiers = ["common", "rare", "legend"].filter(k => tasks.some(t => tierOf(t) === k));
+  const total = tiers.reduce((sum, k) => sum + TIER_CHANCE[k], 0) + (jk.length ? TIER_CHANCE.joker : 0);
+  const segs = [];
+  tiers.forEach(k => {
+    const ts = tasks.filter(t => tierOf(t) === k);
+    ts.forEach(t => segs.push({ kind: k, label: t.text, task: t, p: TIER_CHANCE[k] / total / ts.length }));
+  });
+  jk.forEach(k => segs.push({ kind: "joker", label: JOKERS[k].name, joker: k, p: TIER_CHANCE.joker / total / jk.length }));
+  return segs;
+}
+
+function arrangeWheel(segs) {
+  const taskSegs = shuffle(segs.filter(s => !s.joker));
+  const jokerSegs = shuffle(segs.filter(s => s.joker));
+  if (!jokerSegs.length || !taskSegs.length) return shuffle(segs);
+  const N = taskSegs.length + jokerSegs.length;
+  const slots = new Array(N).fill(null);
+  const used = new Set();
+  jokerSegs.forEach((jk, i) => {
+    let pos = Math.floor((i + 0.5) * N / jokerSegs.length);
+    while (used.has(pos)) pos = (pos + 1) % N;
+    used.add(pos);
+    slots[pos] = jk;
+  });
+  let ti = 0;
+  for (let i = 0; i < N; i++) {
+    if (!slots[i]) slots[i] = taskSegs[ti++];
+  }
+  const shift = Math.floor(Math.random() * N);
+  return slots.slice(shift).concat(slots.slice(0, shift));
+}
+
+function pickSeg(segs, excl) {
+  const pool = segs.filter(sg => sg !== excl && !(excl && !sg.task));
+  let r = Math.random() * pool.reduce((sum, sg) => sum + sg.p, 0);
+  for (const sg of pool) { r -= sg.p; if (r <= 0) return sg; }
+  return pool[pool.length - 1];
+}
+
+function roll(segs) {
+  const win = pickSeg(segs);
+  if (!win.joker) return { items: [win.task], jackpot: false, joker: null, seg: win };
+  const j = win.joker;
+  const taskSegs = segs.filter(sg => sg.task);
+  if (j === "jackpot") {
+    const x = pickSeg(taskSegs), y = pickSeg(taskSegs, x);
+    return { items: [x.task, y.task], jackpot: true, joker: j, seg: win };
+  }
+  if (j === "fork") {
+    const x = pickSeg(taskSegs), y = pickSeg(taskSegs, x);
+    return { items: [x.task, y.task], jackpot: false, joker: j, seg: win, chosen: 0 };
+  }
+  if (j === "bonus") {
+    return { items: [], jackpot: false, joker: j, seg: win };
+  }
+  if (j === "dejavu") {
+    const past = done.filter(e => Array.isArray(e.tasks) && e.tasks.length);
+    if (!past.length) {
+      return { items: [], jackpot: false, joker: j, seg: win, emptyHistory: true };
+    }
+    const prev = rnd(past);
+    return {
+      items: prev.tasks.map(txt => ({ text: txt, rarity: "joker", author: prev.author || "" })),
+      jackpot: false, joker: j, seg: win
+    };
+  }
+  const x = pickSeg(taskSegs);
+  return { items: [x.task], jackpot: false, joker: j, seg: win, revealed: false, endsAt: j === "speedrun" ? Date.now() + SPEEDRUN_SEC * 1000 : 0 };
+}
+
+function layout(segs) { let a0 = 0; return segs.map(sg => { const o = { sg, a0, ang: sg.p * 360 }; a0 += o.ang; return o; }); }
+function drawWheel(segs) {
+  const R = 146, C = 150;
+  const pt = deg => [(C + R * Math.sin(deg * Math.PI / 180)).toFixed(2), (C - R * Math.cos(deg * Math.PI / 180)).toFixed(2)];
+  let h = '<svg viewBox="0 0 300 300" role="img" aria-label="Колесо с занятиями">';
+  layout(segs).forEach(({ sg, a0, ang }) => {
+    if (ang >= 359.9) h += `<circle class="seg ${sg.kind}" cx="${C}" cy="${C}" r="${R}"/>`;
+    else {
+      const [x1, y1] = pt(a0), [x2, y2] = pt(a0 + ang);
+      h += `<path class="seg ${sg.kind}" d="M${C} ${C}L${x1} ${y1}A${R} ${R} 0 ${ang > 180 ? 1 : 0} 1 ${x2} ${y2}Z"/>`;
+    }
+    const fs = Math.min(14, ang * Math.PI / 180 * 95 * 0.62);
+    if (fs < 7) return;
+    const maxc = Math.max(4, Math.floor(104 / (fs * 0.6)));
+    const label = sg.label.length > maxc ? sg.label.slice(0, maxc - 1) + "…" : sg.label;
+    h += `<text class="wt ${sg.kind}" x="${C + R - 12}" y="${C}" text-anchor="end" dominant-baseline="central" font-size="${fs.toFixed(1)}" transform="rotate(${(a0 + ang / 2 - 90).toFixed(2)} ${C} ${C})">${esc(label)}</text>`;
+  });
+  $("wheelSpin").innerHTML = h + `<circle class="hub" cx="${C}" cy="${C}" r="15"/></svg>`;
+}
+function resetWheelRotation() {
+  const el = $("wheelSpin");
+  el.style.transition = "none"; el.style.transform = "rotate(0deg)"; void el.offsetWidth; el.style.transition = "";
+}
+function refreshWheel() {
+  if (busy || current) return;
+  $("wheelbox").hidden = !tasks.length;
+  if (!tasks.length) return;
+  resetWheelRotation(); drawWheel(arrangeWheel(wheelModel()));
+}
+
+/* ---------- Выбор джокеров ---------- */
+function renderChips() {
+  const box = $("chips"); box.replaceChildren();
+  Object.entries(JOKERS).forEach(([k, j]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = j.name; b.title = j.hint;
+    b.setAttribute("aria-pressed", enabledJokers.includes(k));
+    b.onclick = () => toggleJoker(k);
+    box.append(b);
+  });
+  const pj = wheelModel().filter(sg => sg.joker).reduce((sum, sg) => sum + sg.p, 0);
+  $("jnote").textContent = !tasks.length ? "" : pj ? "Джокеры вместе занимают " + Math.round(pj * 100) + "% колеса." : "Джокеров на колесе нет.";
+}
+function toggleJoker(k) {
+  if (busy) return;
+  enabledJokers = enabledJokers.includes(k) ? enabledJokers.filter(x => x !== k) : [...enabledJokers, k];
+  renderChips(); renderControls(); refreshWheel();
+  if (current) toast("Колесо обновится со следующего кручения");
+  store.saveSettings({ jokers: enabledJokers }).catch(() => toast("Не получилось сохранить"));
+}
+
+/* ---------- Отрисовка карточки ---------- */
+function renderStage(res, spinning) {
+  stopTimer();
+  const st = $("stage"), joker = res && res.joker;
+  st.className = "stage" + (res && res.jackpot ? " jackpot" : joker ? " joker" : "");
+  st.replaceChildren();
+  const line = (cls, txt) => { const p = document.createElement("p"); p.className = cls; p.textContent = txt; st.append(p); return p; };
+  if (spinning) return line("hint", "Крутим...");
+  if (!res) return line("hint", tasks.length
+    ? "Жми «Крутить». Чем больше сектор, тем выше шанс. На колесе спрятаны 7 джокеров."
+    : "Пул пуст. Добавьте первое занятие на вкладке «Пул».");
+
+  const tag = document.createElement("span");
+  tag.className = "tag " + (joker ? "joker" : tierOf(res.items[0]));
+  tag.textContent = joker ? "Джокер: " + JOKERS[joker].name.toLowerCase() : LABELS[tierOf(res.items[0])];
+  st.append(tag);
+
+  if (joker === "bonus" || (joker === "dejavu" && res.emptyHistory)) {
+    line("task", "+1 реролл");
+    line("hint", res.emptyHistory
+      ? "В истории пока пусто, поэтому держите утешительный +1 реролл!"
+      : "Реролл уже в запасе. Крутите дальше.");
+    return;
+  }
+
+  if (joker === "fork") {
+    line("hint", "Выберите одно из двух заданий для компании:");
+    const list = document.createElement("div");
+    list.className = "fork-list";
+    res.items.forEach((t, idx) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fork-opt";
+      btn.setAttribute("aria-pressed", res.chosen === idx);
+      btn.textContent = t.text;
+      if (t.author) {
+        const sm = document.createElement("small");
+        sm.textContent = "Автор: " + t.author;
+        btn.append(sm);
+      }
+      btn.onclick = () => { res.chosen = idx; renderStage(res); };
+      list.append(btn);
+    });
+    st.append(list);
+    return;
+  }
+
+  if (joker === "agent") {
+    if (!res.revealed) {
+      line("task", "Секретное задание");
+      line("hint", "Один игрок отворачивается, смотрит задание и выполняет его так, чтобы остальные не догадались.");
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "secret-btn"; b.textContent = "Показать одному";
+      b.onclick = () => { res.revealed = true; renderStage(res); };
+      st.append(b);
+      return;
+    }
+    line("task", res.items[0].text);
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "secret-btn"; b.textContent = "Скрыть обратно";
+    b.onclick = () => { res.revealed = false; renderStage(res); };
+    st.append(b);
+    return;
+  }
+
+  if (joker === "boomerang") {
+    const author = res.items[0].author || "Аноним";
+    const badge = document.createElement("div");
+    badge.className = "boom-badge";
+    badge.textContent = "Выполняет в одиночку: " + author;
+    st.append(badge);
+    line("task", res.items[0].text);
+    line("hint", "Карточка вернулась к тому, кто её придумал. Остальные снимают!");
+    return;
+  }
+
+  if (joker === "speedrun") {
+    const tEl = document.createElement("div");
+    tEl.className = "timer";
+    st.append(tEl);
+    line("task", res.items[0].text);
+    line("hint", "Успейте выполнить задание до конца таймера!");
+    const updateTimer = () => {
+      const left = Math.max(0, Math.ceil((res.endsAt - Date.now()) / 1000));
+      const mm = String(Math.floor(left / 60)).padStart(2, "0");
+      const ss = String(left % 60).padStart(2, "0");
+      tEl.textContent = left > 0 ? `${mm}:${ss}` : "Время вышло!";
+      tEl.classList.toggle("urgent", left <= 60);
+      if (left <= 0) stopTimer();
+    };
+    updateTimer();
+    timerHandle = setInterval(updateTimer, 500);
+    return;
+  }
+
+  if (joker === "dejavu") {
+    line("hint", "Повторите это задание из вашей истории в новой локации на максималках:");
+    res.items.forEach(t => line("task", t.text));
+    return;
+  }
+
+  res.items.forEach(t => line("task", t.text));
+  if (joker === "jackpot") line("hint", "Совместите оба занятия.");
+  if (!joker && res.items[0].author) line("by", "Придумал(а): " + res.items[0].author);
+}
+
+function isPassiveJoker(res) {
+  return res && (res.joker === "bonus" || (res.joker === "dejavu" && res.emptyHistory));
+}
+
+function renderControls() {
+  const canAct = current && !isPassiveJoker(current);
+  $("score").textContent = walk.score;
+  $("reroll").textContent = "Реролл (" + walk.rerolls + ")";
+  $("reroll").disabled = busy || !canAct || walk.rerolls <= 0;
+  $("done").disabled = busy || !canAct || uploading > 0;
+  $("spin").disabled = busy || tasks.length === 0;
+  $("attach").hidden = busy || !canAct;
+  $("count").textContent = tasks.length ? "(" + tasks.length + ")" : "";
+}
+
+function renderList() {
+  const ul = $("list"); ul.replaceChildren();
+  if (!tasks.length) { const li = document.createElement("li"); li.textContent = "Пока пусто. Добавьте что-нибудь."; ul.append(li); return; }
+  tasks.forEach(t => {
+    const li = document.createElement("li");
+    const dot = document.createElement("span"); dot.className = "dot " + t.rarity;
+    const box = document.createElement("div"); box.className = "t";
+    const tx = document.createElement("div"); tx.textContent = t.text;
+    const m = document.createElement("div"); m.className = "m"; m.textContent = LABELS[t.rarity] + (t.author ? ", " + t.author : "");
+    box.append(tx, m);
+    const del = document.createElement("button"); del.className = "del"; del.type = "button";
+    del.setAttribute("aria-label", "Удалить задание"); del.textContent = "×";
+    del.onclick = () => ask("Удалить это задание?", () => store.remove(t.id).catch(() => toast("Не получилось удалить")));
+    li.append(dot, box, del); ul.append(li);
+  });
+}
+
+/* ---------- Действия ---------- */
+async function spin(isReroll) {
+  if (busy || !tasks.length) return;
+  if (isReroll) { if (walk.rerolls <= 0) return; walk.rerolls--; saveWalk(); }
+  stopTimer();
+  busy = true; current = null; media = []; renderThumbs(); renderStage(null, true); renderControls(); haptic("light");
+  const segs = arrangeWheel(wheelModel());
+  const res = roll(segs);
+  $("wheelbox").hidden = false;
+  resetWheelRotation(); drawWheel(segs);
+  const { a0, ang } = layout(segs).find(o => o.sg === res.seg);
+  const target = 360 * 5 + (360 - (a0 + ang / 2)) + (Math.random() - 0.5) * ang * 0.7;
+  $("wheelSpin").style.transform = `rotate(${target}deg)`;
+  const tick = setInterval(() => haptic("soft"), 200);
+  await sleep(SPIN_MS + 150);
+  clearInterval(tick);
+  current = res; busy = false;
+  if (isPassiveJoker(res)) { walk.rerolls++; saveWalk(); }
+  renderStage(current); renderControls();
+  haptic(res.joker ? "heavy" : "medium");
+  if (res.joker) toast("Джокер: " + JOKERS[res.joker].name.toLowerCase());
+}
+$("spin").onclick = () => spin(false);
+$("reroll").onclick = () => spin(true);
+$("done").onclick = async () => {
+  if (!current || uploading || isPassiveJoker(current)) return;
+  const chosenItems = current.joker === "fork"
+    ? [current.items[current.chosen || 0]]
+    : current.items;
+  const entry = {
+    tasks: chosenItems.map(t => t.text),
+    jackpot: current.jackpot,
+    joker: current.joker || null,
+    media: media.filter(m => !m.up).map(m => ({ url: m.url, type: m.type, ...(m.temp ? { temp: true } : {}) })),
+    author: myName
+  };
+  $("done").disabled = true;
+  try { await store.addDone(entry); }
+  catch (err) { toast("Не получилось сохранить"); renderControls(); return; }
+  stopTimer();
+  walk.score++; saveWalk(); current = null; media = [];
+  renderThumbs(); renderStage(null); renderControls(); refreshWheel(); toast("Засчитано");
+};
+$("reset").onclick = () => {
+  ask("Сбросить счёт и реролл?", () => {
+    stopTimer();
+    walk = { score: 0, rerolls: REROLLS_PER_WALK }; saveWalk(); current = null; renderStage(null); renderControls(); refreshWheel();
+  });
+};
+
+$("addForm").onsubmit = e => {
+  e.preventDefault();
+  const ta = $("newText"), text = ta.value.trim();
+  if (!text) return;
+  if (!store) return toast("База ещё подключается, подождите секунду", 3000);
+  const rarity = document.querySelector('input[name="rar"]:checked').value;
+  ta.value = "";
+  const slow = setTimeout(() => toast("Сохранение затянулось: проверьте связь с базой", 5000), 8000);
+  Promise.resolve().then(() => store.add({ text, rarity, author: myName }))
+    .then(() => { clearTimeout(slow); toast("Добавлено"); })
+    .catch(err => { clearTimeout(slow); if (!ta.value) ta.value = text; toast(errText(err), 5000); setStatus(errText(err)); });
+};
+
+/* ---------- Фото и видео ---------- */
+async function shrink(file, max = 1600, q = 0.85) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise(r => c.toBlob(b => r(b || file), "image/jpeg", q));
+  } catch (e) { return file; }
+}
+async function upload(file) {
+  const type = file.type.startsWith("video") ? "video" : "image";
+  if (!CLOUD.name) {
+    if (type === "video") return { url: URL.createObjectURL(file), type, temp: true };
+    const small = await shrink(file, 900, 0.65);
+    const url = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(small); });
+    return { url, type };
+  }
+  const body = type === "image" ? await shrink(file) : file;
+  const fd = new FormData();
+  fd.append("file", body); fd.append("upload_preset", CLOUD.preset);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD.name}/${type}/upload`, { method: "POST", body: fd });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((j.error && j.error.message) || "upload");
+  return { url: j.secure_url, type };
+}
+function renderThumbs() {
+  const box = $("thumbs"); box.replaceChildren();
+  media.forEach(m => {
+    const d = document.createElement("div"); d.className = "th" + (m.up ? " up" : "");
+    const isVid = m.type === "video";
+    const el = document.createElement(isVid ? "video" : "img");
+    el.src = isVid ? m.url + "#t=0.1" : m.url;
+    if (isVid) { el.muted = true; el.playsInline = true; el.preload = "metadata"; } else el.alt = "Вложение";
+    d.append(el);
+    if (!m.up) {
+      const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×";
+      x.setAttribute("aria-label", "Убрать файл");
+      x.onclick = () => { media = media.filter(i => i !== m); renderThumbs(); };
+      d.append(x);
+    }
+    box.append(d);
+  });
+}
+$("file").onchange = async e => {
+  const files = [...e.target.files]; e.target.value = "";
+  for (const f of files) {
+    const ph = { up: true, type: f.type.startsWith("video") ? "video" : "image", url: URL.createObjectURL(f) };
+    media.push(ph); uploading++; renderThumbs(); renderControls();
+    try { Object.assign(ph, await upload(f), { up: false }); }
+    catch (err) { media = media.filter(m => m !== ph); toast("Не загрузилось: " + (err.message || "ошибка").slice(0, 60)); }
+    uploading--; renderThumbs(); renderControls();
+  }
+};
+
+/* ---------- Выполненные ---------- */
+function fmt(ts) {
+  const d = ts && ts.toDate ? ts.toDate() : ts ? new Date(ts) : new Date();
+  return d.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+}
+function renderDone() {
+  const box = $("doneList"); box.replaceChildren();
+  $("doneCount").textContent = done.length ? "(" + done.length + ")" : "";
+  if (!done.length) {
+    const p = document.createElement("p"); p.className = "hint";
+    p.textContent = "Здесь появятся выполненные задания с фото и видео.";
+    box.append(p); return;
+  }
+  done.forEach(e => {
+    const card = document.createElement("article"); card.className = "entry";
+    if (e.jackpot) {
+      const t = document.createElement("span"); t.className = "tag legend"; t.textContent = "Джекпот"; card.append(t);
+    } else if (e.joker && JOKERS[e.joker]) {
+      const t = document.createElement("span"); t.className = "tag joker"; t.textContent = JOKERS[e.joker].name; card.append(t);
+    }
+    (e.tasks || []).forEach(txt => { const h = document.createElement("h3"); h.textContent = txt; card.append(h); });
+    if (e.media && e.media.length) {
+      const gal = document.createElement("div"); gal.className = "gal";
+      e.media.forEach(m => {
+        if (m.type === "video") {
+          const v = document.createElement("video"); v.src = m.url + "#t=0.1"; v.controls = true; v.playsInline = true; v.preload = "metadata";
+          gal.append(v);
+        } else {
+          const im = document.createElement("img"); im.src = m.url; im.alt = "Фото с прогулки";
+          im.onerror = () => { im.replaceWith(Object.assign(document.createElement("p"), { className: "hint", textContent: "Фото не загрузилось" })); };
+          im.onclick = () => { $("lightImg").src = m.url; $("light").hidden = false; };
+          gal.append(im);
+        }
+      });
+      card.append(gal);
+    }
+    const meta = document.createElement("div"); meta.className = "m";
+    const who = document.createElement("span"); who.textContent = (e.author || "Аноним") + ", " + fmt(e.createdAt);
+    const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "Удалить";
+    del.onclick = () => ask("Удалить эту запись?", () => store.removeDone(e.id).then(() => toast("Удалено")).catch(() => toast("Не получилось удалить")));
+    meta.append(who, del); card.append(meta);
+    box.append(card);
+  });
+}
+$("light").onclick = () => { $("light").hidden = true; };
+
+/* ---------- Вкладки ---------- */
+const TABS = { roll: ["tabRoll", "panelRoll"], pool: ["tabPool", "panelPool"], done: ["tabDone", "panelDone"] };
+function showTab(name) {
+  for (const [k, [t, p]] of Object.entries(TABS)) {
+    $(p).hidden = k !== name; $(t).setAttribute("aria-selected", k === name);
+  }
+}
+Object.entries(TABS).forEach(([k, [t]]) => { $(t).onclick = () => showTab(k); });
+
+/* ---------- Старт ---------- */
+let store;
+(async function init() {
+  if (!room && CONFIG.projectId) { showRoomGate(); return; }
+  if (!room) room = "demo";
+  $("roomName").textContent = room;
+  try { store = await makeStore(); }
+  catch (e) { store = await makeStore(true); setStatus("Не удалось подключить базу (" + String(e.code || e.message).slice(0, 50) + "). Задания сохраняются только на этом телефоне."); }
+  if (store.demo && !CONFIG.projectId) setStatus("Демо-режим: база не подключена, задания лежат только на этом телефоне.");
+  store.subscribe(list => {
+    tasks = list; renderList(); renderControls(); renderChips(); refreshWheel();
+    if (!current && !busy) renderStage(null);
+  });
+  store.subscribeSettings(st => {
+    if (Array.isArray(st.jokers)) {
+      const valid = st.jokers.filter(k => k in JOKERS);
+      enabledJokers = (st.jokers.length > 0 && valid.length === 0) ? Object.keys(JOKERS) : valid;
+    } else {
+      enabledJokers = Object.keys(JOKERS);
+    }
+    renderChips(); renderControls(); refreshWheel();
+  });
+  store.subscribeDone(list => { done = list; renderDone(); });
+  renderStage(null); renderControls(); renderDone(); renderChips();
+})();
+</script>
+</body>
+</html>
